@@ -5,8 +5,12 @@ __pycache__/
 
 # Data & Large Files (Don't upload the dataset!)
 data/
-results/predictions/
+
+# Track report images but ignore heavy data
+results/predictions/**
+!results/predictions/**/
 !results/predictions/**/*.png
+
 *.nii.gz
 *.mha
 *.h5
