@@ -1,0 +1,40 @@
+# Advanced BraTS Configuration
+# Includes VAE Regularization and Modality Gating
+
+# Data Paths
+data:
+  train_dir: "D:/AICode/Medical Lab/BraTS/data/train/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData"
+  val_dir: "D:/AICode/Medical Lab/BraTS/data/validation/ASNR-MICCAI-BraTS2023-GLI-Challenge-ValidationData/ASNR-MICCAI-BraTS2023-GLI-Challenge-ValidationData"
+  results_dir: "D:/AICode/Medical Lab/BraTS/results/advanced"
+  checkpoint_dir: "D:/AICode/Medical Lab/BraTS/results/checkpoints/advanced"
+
+# Training hyperparameters
+training:
+  training_time: 40Hours
+  max_epochs: 40
+  val_interval: 2
+  batch_size: 1            # Back to 1 because Advanced U-Net uses more VRAM
+  grad_accumulation: 8     # Effective batch size = 8
+  learning_rate: 0.0002    # Slightly higher starting LR for AdamW
+  weight_decay: 0.00001
+  seed: 42
+  num_workers: 0
+
+# Model Architecture
+model:
+  name: "AdvancedBraTSNet"
+  in_channels: 4
+  out_channels: 3
+  features: [32, 64, 128, 256]
+  vae_reg: true
+  vae_weight: 0.1          # Weight of the reconstruction loss
+
+# Patch-based training
+patch:
+  roi_size: [96, 96, 96]
+  num_samples: 2
+
+# Memory optimization
+optimization:
+  amp: true
+  cache_rate: 0.05

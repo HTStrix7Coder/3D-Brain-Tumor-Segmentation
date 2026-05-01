@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Large Files (Don't upload the dataset!)
+data/
+results/predictions/
+*.nii.gz
+*.mha
+*.h5
+*.pth
+
+# Model Checkpoints
+results/checkpoints/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+ai_lab/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Config Local Overrides
+configs/local_*.yaml

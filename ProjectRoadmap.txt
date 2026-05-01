@@ -1,0 +1,326 @@
+================================================================================
+                        PROJECT SPECIFICATION DOCUMENT
+================================================================================
+
+Title:
+  Efficient Adaptive Multi-Modal Fusion with VAE-Derived Uncertainty
+  Estimation for 3D Brain Tumor Segmentation on Consumer Hardware
+
+================================================================================
+1. PROBLEM STATEMENT
+================================================================================
+
+Automatic segmentation of brain tumors from multi-parametric MRI is critical
+for diagnosis, treatment planning, and monitoring. The task involves labeling
+three clinically relevant sub-regions:
+
+  - Whole Tumor (WT)    — entire visible tumor including edema
+  - Tumor Core (TC)     — active tumor mass excluding edema
+  - Enhancing Tumor (ET) — most aggressive, contrast-enhancing region
+
+Input: 4 co-registered MRI modalities per patient (T1, T1c, T2, FLAIR).
+Output:
+  - Voxel-wise segmentation mask with 3 nested sub-regions (WT, TC, ET)
+  - Voxel-wise uncertainty/confidence map derived from the VAE branch
+
+================================================================================
+2. BACKGROUND & LITERATURE CONTEXT
+================================================================================
+
+This project builds upon a well-established line of research:
+
+  [2015] U-Net (Ronneberger et al.)
+         - Encoder-decoder with skip connections
+         - Foundation for all modern medical segmentation
+         - Limitation: No global context, naïve concatenation of modalities
+
+  [2018] VAE-Regularized 3D Model (Myronenko — BraTS 2018 Winner)
+         - Added variational autoencoder branch as regularizer
+         - Improved generalization with limited training data
+         - Limitation: Still uses simple early fusion of modalities
+
+  [2021] UNETR (Hatamizadeh et al.)
+         - Vision Transformer encoder + CNN decoder
+         - Captures long-range spatial dependencies
+         - Limitation: Treats all modalities equally via concatenation
+
+  [2023-2026] Adaptive Multi-Modal Fusion Methods
+         - A2FSeg (2023): Learning-based gating for modality contribution
+         - MASM (2024): Modality-aware modules with self-attention
+         - CG-MAF (2024): Cross-gated multi-path attention fusion
+         - Sub-Region-Aware Fusion (2026): Region-specific modality weighting
+
+  NOTE: Adaptive fusion is NOT a novel concept. Multiple published works
+  already address this problem with various architectures. This project does
+  not claim architectural novelty.
+
+  GAP IDENTIFIED: Existing works use the VAE branch purely as a training
+  regularizer and discard it at inference. None of the above methods
+  repurpose the VAE reconstruction error as a voxel-wise uncertainty
+  signal alongside the segmentation output. This project exploits this
+  overlooked connection to provide clinical confidence maps at zero
+  additional architectural cost.
+
+================================================================================
+3. PROJECT SCOPE & CONTRIBUTION
+================================================================================
+
+What this project IS:
+  - A practical, reproducible study combining adaptive gating-based fusion
+    with VAE regularization in a single lightweight model
+  - An efficiency-focused implementation constrained to consumer GPU
+    (RTX 4060 Ti, 8GB VRAM)
+  - A rigorous experimental comparison with ablation studies
+  - A demonstration of repurposing an existing component (VAE) for
+    uncertainty estimation — a practical contribution, not a new architecture
+
+What this project is NOT:
+  - A novel architectural contribution
+  - A state-of-the-art benchmark attempt
+  - A paper-ready research submission
+
+Specific contributions:
+  1. Unified lightweight model combining adaptive gating + VAE regularization
+  2. VAE-derived uncertainty maps: repurpose the VAE reconstruction error
+     at inference to produce voxel-wise confidence maps at zero extra cost
+     (no ensembles, no MC dropout, no additional parameters)
+  3. Efficiency analysis: parameter count, VRAM usage, inference time on
+     consumer hardware vs. reported results from larger models
+  4. Systematic ablation study isolating the effect of each component
+  5. Modality importance visualizations per tumor sub-region
+  6. Robustness evaluation under simulated missing modalities
+  7. Correlation analysis: uncertainty maps vs. actual segmentation errors
+     to validate clinical usefulness of the confidence signal
+
+================================================================================
+4. ARCHITECTURE OVERVIEW
+================================================================================
+
+  Input (4 MRI modalities)
+        │
+        ├──► Modality-Specific Feature Extractors (lightweight CNNs)
+        │         │          │          │          │
+        │        T1        T1c        T2       FLAIR
+        │         │          │          │          │
+        │         └──────────┴──────────┴──────────┘
+        │                        │
+        │              Adaptive Gating Module
+        │         (learnable per-modality weights,
+        │          conditioned on spatial features)
+        │                        │
+        │                  Fused Features
+        │                        │
+        ├──► Transformer Encoder (lightweight UNETR / SwinUNETR)
+        │                        │
+        ├──► CNN Decoder with Skip Connections
+        │                        │
+        ├──► Segmentation Head ──► Output 1: WT, TC, ET masks
+        │
+        └──► VAE Branch (used during BOTH training AND inference)
+                  │
+                  │  [Training]
+                  ├── Encoder → latent z (μ, σ)
+                  ├── Decoder → reconstruction loss (KL + L2)
+                  └── Purpose: regularization
+                  │
+                  │  [Inference — the novel reuse]
+                  ├── Decoder reconstructs input from learned features
+                  ├── Compute voxel-wise |input - reconstruction|²
+                  └── Output 2: Uncertainty / confidence map
+                       • High error = model is uncertain about that voxel
+                       • Low error  = model is confident
+                       • Enables clinical flagging of unreliable regions
+
+================================================================================
+5. WORKFLOW
+================================================================================
+
+Phase 1 — Data Preparation
+  - Register on Synapse.org, download BraTS 2021 training + validation sets
+  - Preprocessing via MONAI transforms:
+      • Co-registration (already done in BraTS)
+      • Skull-stripping (already done in BraTS)
+      • Intensity normalization (per-modality z-score)
+      • Resampling to uniform resolution
+  - Patch-based extraction: 96³ or 128³ patches centered on tumor regions
+  - Train/validation split (5-fold cross-validation or 80/20)
+
+Phase 2 — Baseline Reproduction (Week 1)
+  - 3D U-Net with 4-channel concatenation (early fusion)
+  - UNETR / SwinUNETR with concatenation (standard MONAI implementation)
+  - Optional: Add standalone VAE regularization to baseline
+  - Purpose: Establish performance floor to compare against
+
+Phase 3 — Proposed Model Implementation (Week 2-3)
+  - Implement modality-specific feature extractors
+  - Implement adaptive gating module (start simple, iterate):
+      • v1: Channel-wise SE-style gating per modality
+      • v2: Spatially-conditioned gating (if v1 works and VRAM allows)
+  - Integrate VAE regularization branch
+  - Verify training stability and VRAM fits within 8GB budget
+
+Phase 4 — Evaluation & Analysis (Week 4+)
+  - Standard metrics on BraTS validation set:
+      • Mean Dice Coefficient (per region: WT, TC, ET)
+      • 95th percentile Hausdorff Distance (HD95)
+  - Ablation experiments:
+      • Baseline (concatenation) vs. adaptive gating
+      • With vs. without VAE branch
+      • Effect of gating complexity (SE-style vs. spatial)
+  - Robustness tests:
+      • Simulated missing modality (drop one channel, replace with zeros)
+      • Performance degradation analysis per dropped modality
+  - Visualizations:
+      • Learned gating weights per modality per tumor region
+      • Overlay of attention maps on MRI slices
+  - Efficiency benchmarks:
+      • Parameter count vs. baselines
+      • Peak VRAM usage during training
+      • Inference time per volume
+
+Phase 5 — Uncertainty Map Analysis (Week 4-5)
+  - Generate VAE reconstruction error maps on validation set
+  - Compute per-voxel uncertainty = |original - VAE_reconstruction|²
+  - Validation experiments:
+      • Correlation between high-uncertainty voxels and actual
+        segmentation errors (where model prediction ≠ ground truth)
+      • Uncertainty calibration: do high-uncertainty regions truly
+        correspond to incorrect predictions?
+      • Per-region analysis: does uncertainty behave differently
+        for WT vs. TC vs. ET boundaries?
+  - Clinical relevance metrics:
+      • % of segmentation errors that fall in top-K% uncertainty voxels
+        (error detection recall)
+      • Uncertainty-thresholded Dice: if we reject voxels above
+        uncertainty threshold, does remaining Dice improve?
+
+Phase 6 — Demo & Documentation
+  - Gradio or Streamlit app showing:
+      • 3D segmentation output (WT, TC, ET overlay on MRI)
+      • Side-by-side uncertainty heatmap (red = uncertain, green = confident)
+      • Slider to threshold uncertainty and highlight flagged regions
+  - Technical report (4-6 pages) summarizing methodology and results
+  - Clean GitHub repository with reproducible training scripts
+
+================================================================================
+6. TECHNICAL CONSTRAINTS
+================================================================================
+
+Hardware:
+  - GPU: NVIDIA RTX 4060 Ti (8GB VRAM)
+  - RAM: System memory (assumed 16-32GB)
+
+Required optimizations:
+  - Mixed precision training: torch.amp.autocast() + GradScaler
+  - Gradient accumulation: effective batch size 4-8
+  - MONAI CacheDataset with cache_rate = 0.1-0.2
+  - Patch size: 96³ preferred, 128³ if VRAM allows
+  - Monitor with nvidia-smi during training
+
+Software stack:
+  - Python 3.10+
+  - PyTorch 2.1+ with CUDA
+  - MONAI (latest)
+  - nibabel, scikit-learn, matplotlib, pandas
+
+================================================================================
+7. REPOSITORY STRUCTURE
+================================================================================
+
+BraTS/
+├── data/                      # BraTS dataset (not committed, gitignored)
+├── src/
+│   ├── models/
+│   │   ├── hybrid_unetr.py    # Main model architecture
+│   │   ├── adaptive_fusion.py # Gating / fusion modules
+│   │   └── vae_branch.py      # VAE branch (regularization + uncertainty)
+│   ├── training/
+│   │   └── train.py           # Training loop (AMP + grad accumulation)
+│   ├── evaluation/
+│   │   └── evaluate.py        # Metrics computation
+│   ├── inference/
+│   │   └── predict.py         # Inference with segmentation + uncertainty
+│   ├── uncertainty/
+│   │   ├── uncertainty_map.py # VAE reconstruction error → confidence map
+│   │   └── calibration.py     # Uncertainty vs. error correlation analysis
+│   ├── utils/
+│   │   ├── metrics.py         # Dice, HD95 implementations
+│   │   └── visualization.py   # Attention maps, gating weights, uncertainty
+│   └── fusion/
+│       └── gating.py          # Gating mechanism implementations
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_baseline_training.ipynb
+│   ├── 03_ablation_analysis.ipynb
+│   └── 04_uncertainty_analysis.ipynb
+├── configs/
+│   └── default.yaml           # Hyperparameters
+├── demo/
+│   └── app.py                 # Gradio/Streamlit (segmentation + uncertainty)
+├── results/
+│   ├── plots/
+│   ├── tables/
+│   └── uncertainty/           # Uncertainty calibration results
+├── requirements.txt
+├── .gitignore
+└── README.md
+
+================================================================================
+8. ENVIRONMENT SETUP
+================================================================================
+
+  conda create -n brats python=3.10
+  conda activate brats
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+  pip install monai[all] nibabel tqdm scikit-learn matplotlib pandas
+
+================================================================================
+9. TIMELINE
+================================================================================
+
+  Week 1:  Environment setup + data download + baseline reproduction
+  Week 2:  Implement adaptive gating module + integrate with UNETR
+  Week 3:  Add VAE branch + full training of proposed model
+  Week 4:  Ablation studies + robustness tests + gating visualizations
+  Week 5:  Uncertainty map generation + calibration analysis + error correlation
+  Week 6:  Demo app (segmentation + uncertainty) + technical report + cleanup
+
+================================================================================
+10. REFERENCES
+================================================================================
+
+  [1] Ronneberger, O., Fischer, P., & Brox, T. (2015).
+      "U-Net: Convolutional Networks for Biomedical Image Segmentation."
+      MICCAI 2015.
+
+  [2] Myronenko, A. (2018).
+      "3D MRI Brain Tumor Segmentation Using Autoencoder Regularization."
+      BraTS Challenge 2018 (1st place solution).
+
+  [3] Hatamizadeh, A., et al. (2021).
+      "UNETR: Transformers for 3D Medical Image Segmentation."
+      WACV 2022.
+
+  [4] BraTS Challenge Datasets:
+      https://www.synapse.org/ (registration required)
+
+  [5] MONAI BraTS Tutorial:
+      https://github.com/Project-MONAI/tutorials/blob/main/3d_segmentation/brats_segmentation_3d.ipynb
+
+  Related adaptive fusion works (for context, not direct baselines):
+  - A2FSeg (2023), MASM (2024), CG-MAF (2024),
+    Sub-Region-Aware Fusion (2026)
+
+  Uncertainty estimation in medical imaging (for context):
+  - Nair et al. (2020). "Exploring Uncertainty Measures in Deep Networks
+    for Multiple Sclerosis Lesion Detection and Segmentation." Medical
+    Image Analysis.
+  - Jungo et al. (2020). "Analyzing the Quality and Challenges in
+    Uncertainty Estimation for Brain Tumor Segmentation." Frontiers
+    in Neuroscience.
+
+================================================================================
+
+CNNs are "Microscopes," Transformers are "Telescopes"
+CNNs (Local Experts): They are amazing at finding tiny edges, textures, and small dots. Since the Enhancing Tumor (ET) is often just a tiny group of voxels, we need the CNN's "microscopic" vision to catch it.
+Transformers (Global Experts): They are amazing at seeing the whole picture. They help the model understand: "If there is swelling here in the frontal lobe, what does that mean for the symmetry of the ventricles?"

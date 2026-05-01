@@ -1,0 +1,46 @@
+# =============================================================================
+# BraTS 2023 - Baseline 3D U-Net Training Configuration
+# =============================================================================
+
+# Data paths
+data:
+  train_dir: "D:/AICode/Medical Lab/BraTS/data/train/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData"
+  val_dir: "D:/AICode/Medical Lab/BraTS/data/val/ASNR-MICCAI-BraTS2023-GLI-Challenge-ValidationData/ASNR-MICCAI-BraTS2023-GLI-Challenge-ValidationData"
+  results_dir: "D:/AICode/Medical Lab/BraTS/results"
+  checkpoint_dir: "D:/AICode/Medical Lab/BraTS/checkpoints"
+  
+
+# Training hyperparameters
+training:
+  max_epochs: 50
+  val_interval: 2          # Validate every N epochs
+  batch_size: 2            # Keep at 1 for 8GB VRAM
+  grad_accumulation: 4     # Effective batch size = 1 * 4 = 4
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  seed: 42
+  num_workers: 0           # Set to 0 on Windows to avoid "shared file mapping" errors
+
+# Model
+model:
+  name: "unet_baseline"    # Simple 3D U-Net
+  in_channels: 4           # T1n, T1c, T2w, T2-FLAIR stacked
+  out_channels: 3          # WT, TC, ET (multi-label)
+  features: [32, 64, 128, 256]  # Smaller than default to fit 8GB
+
+# Patch-based training (for 8GB GPU)
+patch:
+  roi_size: [96, 96, 96]
+  num_samples: 2           # Random crops per volume
+
+# Data augmentation
+augmentation:
+  rand_flip_prob: 0.5
+  rand_rotate_prob: 0.3
+  rand_scale_prob: 0.3
+  rand_noise_prob: 0.1
+
+# Memory optimization
+optimization:
+  amp: true                # Mixed precision (FP16)
+  cache_rate: 0.08          # Cache 10% of dataset in RAM
