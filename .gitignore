@@ -6,6 +6,7 @@ __pycache__/
 # Data & Large Files (Don't upload the dataset!)
 data/
 results/predictions/
+!results/predictions/**/*.png
 *.nii.gz
 *.mha
 *.h5

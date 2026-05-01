@@ -53,10 +53,16 @@ python src/utils/visualize_results.py <patient_id>
 ```
 
 ## 📊 Visualizations
-The pipeline generates a 3-panel clinical report:
-*   **Panel 1:** Original MRI (T1c).
-*   **Panel 2:** Multi-region segmentation overlay (WT, TC, ET).
-*   **Panel 3:** VAE Uncertainty "Lava" Map—highlighting areas of low model confidence.
+The NeuroGate-VAE pipeline generates high-resolution clinical reports for every patient, providing a complete 360-degree view of the AI's decision-making process.
+
+### **Sample Clinical Analysis Report**
+![NeuroGate-VAE Sample Report](results/predictions/BraTS-GLI-00264-000/BraTS-GLI-00264-000_report.png)
+
+**The Report Includes:**
+*   **Top Row:** All 4 Input MRI Modalities (T1, T1c, T2, FLAIR).
+*   **Segmentation Overlay:** 3D Tumor sub-regions (WT/TC/ET) overlaid on T1c.
+*   **VAE Uncertainty Engine:** Voxel-wise confidence mapping (Lava Map).
+*   **Modality Gating Importance:** Explainable AI (XAI) bar chart showing the neural network's internal trust in each scan.
 
 ## 🛡️ Developed By
 **NeuroGate-VAE** was developed as a research-focused implementation of advanced 3D medical segmentation.
